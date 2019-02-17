@@ -4,26 +4,61 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 )
 
 func main() {
-	locale := []string{"de", "es", "pt-BR", "en", "fr", "ru", "ja", "zh-CN"}
 	base := "data/GeoLite2-City-Locations"
+	locale := []string{"de", "es", "pt-BR", "en", "fr", "ru", "ja", "zh-CN"}
 
-	for _, l := range locale {
-		input := fmt.Sprintf("%s-%s.csv", base, l)
-		output := fmt.Sprintf("js/country-%s.js", l)
-		genJS(input, output)
+	outDir := "js"
+	err := os.MkdirAll(outDir, 0755)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, loc := range locale {
+		input := fmt.Sprintf("%s-%s.csv", base, loc)
+		geoList := GenCountryList(input, "")
+
+		err = genJS(geoList, outDir, loc)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
-func genJS(csvIn, jsOut string) {
-	geoList := GenCountryList(csvIn, "")
+func genJS(cs []Country, dir, locale string) error {
+	shortLocale := strings.ToLower(strings.Replace(locale, "-", "", -1))
+	outDir := filepath.Join(dir, shortLocale)
+	if _, err := os.Stat(outDir); os.IsNotExist(err) {
+		err := os.Mkdir(outDir, 0755)
+		if err != nil {
+			return err
+		}
+	}
 
-	f, err := os.Create(jsOut)
+	// js object: code to name
+	err := genJSObj(cs, filepath.Join(outDir, "map.js"))
 	if err != nil {
-		panic(err)
+		return err
+	}
+
+	// js array of names
+	err = genJSArr(cs, filepath.Join(outDir, "list.js"))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func genJSObj(geoList []Country, out string) error {
+	f, err := os.Create(out)
+	if err != nil {
+		return err
 	}
 	defer f.Close()
 
@@ -37,6 +72,29 @@ func genJS(csvIn, jsOut string) {
 		}
 	}
 	f.WriteString("}")
+	return nil
+}
+
+func genJSArr(geoList []Country, out string) error {
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	sort.Sort(ByName(geoList))
+
+	size := len(geoList)
+	f.WriteString("export default [\n")
+	for i, c := range geoList {
+		if i < size-1 {
+			f.WriteString(fmt.Sprintf("  '%s',\n", c.Name))
+		} else {
+			f.WriteString(fmt.Sprintf("  '%s'\n", c.Name))
+		}
+	}
+	f.WriteString("]")
+	return nil
 }
 
 // GenCountryList generates a sorted list of unique code and country name.
@@ -113,4 +171,19 @@ func (a ByCode) Swap(i, j int) {
 
 func (a ByCode) Less(i, j int) bool {
 	return a[i].Code < a[j].Code
+}
+
+// ByName sorts country by name.
+type ByName []Country
+
+func (a ByName) Len() int {
+	return len(a)
+}
+
+func (a ByName) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a ByName) Less(i, j int) bool {
+	return a[i].Name < a[j].Name
 }
