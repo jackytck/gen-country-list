@@ -1,33 +1,147 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/csv"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-func main() {
-	base := "data/GeoLite2-City-Locations"
-	locale := []string{"de", "es", "pt-BR", "en", "fr", "ru", "ja", "zh-CN"}
+const sourceURL = "https://geolite.maxmind.com/download/geoip/database/GeoLite2-City-CSV.zip"
+const csvPrefix = "GeoLite2-City-Locations"
 
-	outDir := "js"
-	err := os.MkdirAll(outDir, 0755)
+func main() {
+	dataDir, err := prepareData("data")
 	if err != nil {
 		panic(err)
 	}
 
+	locale := []string{"de", "es", "pt-BR", "en", "fr", "ru", "ja", "zh-CN"}
+
+	outDir := "js"
+	err = os.MkdirAll(outDir, 0755)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Printf("Parsing %s\n", dataDir)
 	for _, loc := range locale {
-		input := fmt.Sprintf("%s-%s.csv", base, loc)
-		geoList := GenCountryList(input, "")
+		input := fmt.Sprintf("%s-%s.csv", csvPrefix, loc)
+		geoList := GenCountryList(filepath.Join(dataDir, input), "")
 
 		err = genJS(geoList, outDir, loc)
 		if err != nil {
 			panic(err)
 		}
 	}
+
+	log.Println("Done")
+}
+
+func prepareData(dir string) (string, error) {
+	_, err := os.Stat(dir)
+	if err == nil {
+		return "", nil
+	}
+	err = os.Mkdir(dir, 0755)
+	if err != nil {
+		return "", err
+	}
+
+	log.Printf("Downloading %s...\n", sourceURL)
+	z := filepath.Join(dir, "csv.zip")
+	err = DownloadFile(z, sourceURL)
+	if err != nil {
+		return "", err
+	}
+
+	log.Println("Extracting...")
+	dataDir, err := Unzip(z, dir)
+	if err != nil {
+		return "", err
+	}
+	err = os.Remove(z)
+	if err != nil {
+		return "", err
+	}
+
+	return dataDir, nil
+}
+
+// DownloadFile downloads from url and save to filepath.
+func DownloadFile(filepath string, url string) error {
+	// Get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Create the file
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+
+// Unzip unzips the zip file and return the name of extracted dir.
+func Unzip(src, dest string) (string, error) {
+	var extractedDir string
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		rc, err := f.Open()
+		if err != nil {
+			return "", err
+		}
+		defer rc.Close()
+
+		fpath := filepath.Join(dest, f.Name)
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fpath, 0755)
+		} else {
+			var fdir string
+			if lastIndex := strings.LastIndex(fpath, string(os.PathSeparator)); lastIndex > -1 {
+				fdir = fpath[:lastIndex]
+			}
+
+			err = os.MkdirAll(fdir, 0755)
+			if err != nil {
+				log.Fatal(err)
+				return "", err
+			}
+			if extractedDir == "" {
+				extractedDir = fdir
+			}
+			f, err := os.OpenFile(
+				fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				return "", err
+			}
+			defer f.Close()
+
+			_, err = io.Copy(f, rc)
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+	return extractedDir, nil
 }
 
 func genJS(cs []Country, dir, locale string) error {
@@ -56,6 +170,7 @@ func genJS(cs []Country, dir, locale string) error {
 }
 
 func genJSObj(geoList []Country, out string) error {
+	log.Printf("Generating %s...\n", out)
 	f, err := os.Create(out)
 	if err != nil {
 		return err
@@ -76,6 +191,7 @@ func genJSObj(geoList []Country, out string) error {
 }
 
 func genJSArr(geoList []Country, out string) error {
+	log.Printf("Generating %s...\n", out)
 	f, err := os.Create(out)
 	if err != nil {
 		return err

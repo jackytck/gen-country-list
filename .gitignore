@@ -1,4 +1,7 @@
 .DS_Store
 js/*
 data/*
+*.csv
+*.zip
+*.txt
 gen-country-list
