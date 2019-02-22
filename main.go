@@ -36,14 +36,21 @@ func main() {
 	}
 
 	log.Printf("Parsing %s\n", dataDir)
+	var geoList []Country
 	for _, loc := range locale {
 		input := fmt.Sprintf("%s-%s.csv", csvPrefix, loc)
-		geoList := GenCountryList(filepath.Join(dataDir, input), "")
+		geoList = GenCountryList(filepath.Join(dataDir, input), "")
 
 		err = genJS(geoList, outDir, loc)
 		if err != nil {
 			panic(err)
 		}
+	}
+
+	// js array of codes
+	err = genJSArrCodes(geoList, filepath.Join(outDir, "codes.js"))
+	if err != nil {
+		panic(err)
 	}
 
 	log.Println("Done")
@@ -161,13 +168,19 @@ func genJS(cs []Country, dir, locale string) error {
 	}
 
 	// js object: code to name
-	err := genJSObj(cs, filepath.Join(outDir, "map.js"))
+	err := genJSObjCodeToName(cs, filepath.Join(outDir, "map-code-name.js"))
+	if err != nil {
+		return err
+	}
+
+	// js object: name to code
+	err = genJSObjNameToCode(cs, filepath.Join(outDir, "map-name-code.js"))
 	if err != nil {
 		return err
 	}
 
 	// js array of names
-	err = genJSArr(cs, filepath.Join(outDir, "list.js"))
+	err = genJSArrNames(cs, filepath.Join(outDir, "list.js"))
 	if err != nil {
 		return err
 	}
@@ -175,7 +188,7 @@ func genJS(cs []Country, dir, locale string) error {
 	return nil
 }
 
-func genJSObj(geoList []Country, out string) error {
+func genJSObjCodeToName(geoList []Country, out string) error {
 	log.Printf("Generating %s...\n", out)
 	f, err := os.Create(out)
 	if err != nil {
@@ -196,7 +209,30 @@ func genJSObj(geoList []Country, out string) error {
 	return nil
 }
 
-func genJSArr(geoList []Country, out string) error {
+func genJSObjNameToCode(geoList []Country, out string) error {
+	log.Printf("Generating %s...\n", out)
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	sort.Sort(ByName(geoList))
+
+	size := len(geoList)
+	f.WriteString("export default {\n")
+	for i, c := range geoList {
+		if i < size-1 {
+			f.WriteString(fmt.Sprintf("  '%s': '%s',\n", c.Name, c.Code))
+		} else {
+			f.WriteString(fmt.Sprintf("  '%s': '%s'\n", c.Name, c.Code))
+		}
+	}
+	f.WriteString("}")
+	return nil
+}
+
+func genJSArrNames(geoList []Country, out string) error {
 	log.Printf("Generating %s...\n", out)
 	f, err := os.Create(out)
 	if err != nil {
@@ -213,6 +249,29 @@ func genJSArr(geoList []Country, out string) error {
 			f.WriteString(fmt.Sprintf("  '%s',\n", c.Name))
 		} else {
 			f.WriteString(fmt.Sprintf("  '%s'\n", c.Name))
+		}
+	}
+	f.WriteString("]")
+	return nil
+}
+
+func genJSArrCodes(geoList []Country, out string) error {
+	log.Printf("Generating %s...\n", out)
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	sort.Sort(ByCode(geoList))
+
+	size := len(geoList)
+	f.WriteString("export default [\n")
+	for i, c := range geoList {
+		if i < size-1 {
+			f.WriteString(fmt.Sprintf("  '%s',\n", c.Code))
+		} else {
+			f.WriteString(fmt.Sprintf("  '%s'\n", c.Code))
 		}
 	}
 	f.WriteString("]")
