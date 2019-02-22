@@ -11,6 +11,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 const sourceURL = "https://geolite.maxmind.com/download/geoip/database/GeoLite2-City-CSV.zip"
@@ -47,7 +52,8 @@ func main() {
 func prepareData(dir string) (string, error) {
 	_, err := os.Stat(dir)
 	if err == nil {
-		return "", nil
+		// @TODO: find the latest GeoLite2-City-CSV dir
+		return "./data/GeoLite2-City-CSV_20190219", nil
 	}
 	err = os.Mkdir(dir, 0755)
 	if err != nil {
@@ -228,6 +234,9 @@ func GenCountryList(csvPath, outPath string) []Country {
 		panic(err)
 	}
 
+	// for removing accents
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+
 	// unique code and country name
 	countDict := make(map[string]Country)
 	for i, l := range lines {
@@ -235,7 +244,8 @@ func GenCountryList(csvPath, outPath string) []Country {
 		if i == 0 || code == "" || name == "" {
 			continue
 		}
-		countDict[code] = Country{code, name}
+		n, _, _ := transform.String(t, name)
+		countDict[code] = Country{code, n}
 	}
 
 	// sort
