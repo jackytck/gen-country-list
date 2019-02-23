@@ -205,7 +205,7 @@ func genJSObjCodeToName(geoList []Country, out string) error {
 			f.WriteString(fmt.Sprintf("  %s: '%s'\n", c.Code, c.Name))
 		}
 	}
-	f.WriteString("})")
+	f.WriteString("})\n")
 	return nil
 }
 
@@ -228,7 +228,7 @@ func genJSObjNameToCode(geoList []Country, out string) error {
 			f.WriteString(fmt.Sprintf("  '%s': '%s'\n", c.Name, c.Code))
 		}
 	}
-	f.WriteString("})")
+	f.WriteString("})\n")
 	return nil
 }
 
@@ -251,7 +251,7 @@ func genJSArrNames(geoList []Country, out string) error {
 			f.WriteString(fmt.Sprintf("  '%s'\n", c.Name))
 		}
 	}
-	f.WriteString("])")
+	f.WriteString("])\n")
 	return nil
 }
 
@@ -274,7 +274,7 @@ func genJSArrCodes(geoList []Country, out string) error {
 			f.WriteString(fmt.Sprintf("  '%s'\n", c.Code))
 		}
 	}
-	f.WriteString("])")
+	f.WriteString("])\n")
 	return nil
 }
 
