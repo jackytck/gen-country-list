@@ -303,8 +303,23 @@ func GenCountryList(csvPath, outPath string) []Country {
 		if i == 0 || code == "" || name == "" {
 			continue
 		}
+
+		// rectify country names:
+		// remove accents, [], and escape ', add SAR
 		n, _, _ := transform.String(t, name)
+		n = strings.Replace(n, "[", "", -1)
+		n = strings.Replace(n, "]", "", -1)
+		n = strings.Replace(n, "]", "", -1)
+		n = strings.Replace(n, "'", "\\'", -1)
+		if n == "Hong Kong" || n == "Macao" {
+			n += " SAR"
+		}
+
 		countDict[code] = Country{code, n}
+	}
+	// append 2 to SX name
+	if countDict["SX"].Name == countDict["MF"].Name {
+		countDict["SX"] = Country{"SX", countDict["SX"].Name + "2"}
 	}
 
 	// sort
